@@ -517,18 +517,3 @@ class Backbone(torch.nn.Module):
             einops.rearrange(masked_support_imgs, 'b n c h w -> (b n) c h w')
         )
         return support_feat
-
-
-if __name__ == '__main__':
-    model = vitmm7()
-    print(model)
-
-    img = torch.rand(2, 3, 224, 224)
-    batch = dict(
-        query_img=img,
-        support_imgs=img,
-        support_masks=torch.ones(2, 5, 224, 224),
-        support_labels=torch.ones(2, 5),
-    )
-    out = model(batch)
-    print(out)

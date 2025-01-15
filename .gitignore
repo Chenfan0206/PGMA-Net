@@ -8,7 +8,3 @@ repository
 data/VOCdevkit 
 log
 logs
-mine/grid_train.py
-mine/grid_train_no_track.py
-.idea
-mine/usage_not_track.md

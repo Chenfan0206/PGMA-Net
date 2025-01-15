@@ -36,7 +36,7 @@ def Weighted_GAP(supp_feat, mask):
     return supp_feat
 
 
-backbone_name = 'RN50'
+backbone_name = 'RN101'
 all_stage = True
 use_dropout = True
 dataset_name = 'voc'

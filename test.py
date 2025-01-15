@@ -1,21 +1,11 @@
-r""" Hypercorrelation Squeeze training (validation) code """
+r"""Visual and Textual Prior Guided Mask Assemble for Few-Shot Segmentation and Beyond """
 import argparse
 
 import torch.optim as optim
 import torch.nn as nn
 import torch
 import os
-# from model.vit_prompt.vit_mm3_SegTextAsConditionHead import (
-#     vitmm3_SegTextAsConditionHead as mymodel,
-# )
-# from model.vit_prompt.vit_mm4 import (vitmm4 as mymodel,)
-# from model.vit_prompt.vit_mm5_dpt import vitmm5 as mymodel
-# from model.vit_prompt.vit_mm6_dpt import vitmm6 as mymodel
-# from model.vit_prompt.vit_mm7 import vitmm7 as mymodel
-# from model.vit_prompt.vit_mm8 import vitmm8 as mymodel\
-# from model.vit_prompt.vit_mm9 import vitmm9 as mymodel
-from model.vit_prompt.vit_mm10 import vitmm10 as mymodel
-
+from model.backbone import Backbone as mymodel
 from common.logger import Logger, AverageMeter
 from common.evaluation import Evaluator
 from common.vis import Visualizer
@@ -52,13 +42,6 @@ def test_vitclip(model, dataloader, nshot):
     for class_id in dataloader.dataset.class_ids:
         iou_per_class[class_id] = []
 
-    # if args.benchmark=="pascal":
-    #     for i in range(class_per_fold*fold, class_per_fold*(fold+1)):
-    #         iou_per_class[i] = []
-    # else:
-    #     for i in range(args.fold, 80,4):
-    #         iou_per_class[i] = []
-
     print(len(iou_per_class))
     print(iou_per_class)
 
@@ -68,12 +51,6 @@ def test_vitclip(model, dataloader, nshot):
         query_path = batch['query_path'][0]
 
         with torch.no_grad():
-            # pred_logits = model(batch['query_img'])
-            # pred_mask = model(img=img, img_metas=img_metas, return_loss=False)
-            # pred_logits = model.forward_dummy(img=batch['query_img'])
-            
-            # pred_logits =model(batch)['pred_logits']
-            # pred_logits =model.module.forward_txt_as_classifier(batch)['pred_logits']
             if args.nshot==1:
                 pred_mask_01 = model(batch)['pred_mask_01']
             else:
@@ -89,8 +66,6 @@ def test_vitclip(model, dataloader, nshot):
                 if args.benchmark=="pascal":
                     _all_support['support_ignore_idxs'] = batch['support_ignore_idxs'] # # 16 5 384 384
 
-                # 需要逐个输入
-
                 for i in range(args.nshot):
                     batch['support_imgs'] = _all_support['support_imgs'][:,i:i+1,:,:,:]
                     batch['support_masks'] = _all_support['support_masks'][:,i:i+1,:,:]
@@ -104,27 +79,13 @@ def test_vitclip(model, dataloader, nshot):
                 pred_mask_logits = sum(pred_mask_logits_list) / len(pred_mask_logits_list)
                 pred_mask_01 = torch.argmax(pred_mask_logits, dim=1)
 
-
-        # pred_mask_c = pred_logits.argmax(dim=1)
-        # print(pred_mask_c.max())
-        # pred_mask_01 = torch.zeros_like(pred_mask_c)
-        # pred_mask_01[pred_mask_c == batch['class_id']] = 1
-
         pred_mask = pred_mask_01
 
 
         assert pred_mask.size() == batch['query_mask'].size()
-
-        # convert pred_mask to int32. 我也不知道为什么要加这个？？？。 但是如果不加，会报错
-        # pred_mask = pred_mask.type(torch.int32)
-        ## 计算iou
-        # 2. Evaluate prediction
         area_inter, area_union = Evaluator.classify_prediction(pred_mask.clone(), batch)
         average_meter.update(area_inter, area_union, batch['class_id'], loss=None)
         average_meter.write_process(idx, len(dataloader), epoch=-1, write_batch_idx=1)
-
-
-        # count the class_wise miou, and visuakl the plot
 
         # Visualize predictions
         if Visualizer.visualize:
@@ -143,34 +104,21 @@ def test_vitclip(model, dataloader, nshot):
             iou_per_class[class_id.item()].append(miou.item()*100)
 
 
-        # if idx == 10:
-        #     break
-  
-
-    ## print the class_wise miou
-    # for i in range(class_per_fold*fold, class_per_fold*(fold+1)):
     for i in dataloader.dataset.class_ids:
         print('class_id: %d, miou: %f' % (i, np.mean(iou_per_class[i])))
         Logger.info(msg='class_id: %d, iou: %f' %
                     (i, np.mean(iou_per_class[i])))
-
-    ## plot the history of miou, each class has a plot in the same figure with different color, and save the figure
 
     class_names = coco_classes if args.benchmark=="coco" else voc_classes
 
 
     iou_lists = []
     labels = []
-    # for i in range(class_per_fold*fold, class_per_fold*(fold+1)):
-    
+
     if args.benchmark=="pascal":
         for i in dataloader.dataset.class_ids:
             iou_lists.append(iou_per_class[i])
             labels.append("{}:{} IoU:{:.1f}".format(i, class_names[i],np.mean(iou_per_class[i])))
-
-
-
-    # Write evaluation results
     average_meter.write_result('Test', 0)
     miou, fb_iou = average_meter.compute_iou()
     print('*'*80)
@@ -193,8 +141,6 @@ def test_vitclip(model, dataloader, nshot):
     plt.ylabel('Count Number')
     # plt.show()
 
-    # save the figure
-    # save_path = Visualizer.vis_path.replace('test_vis/', 'histogram_fold_{}_shot_{}.png'.format(args.fold, args.nshot))
     save_path = Visualizer.vis_path.replace('test_vis/', 'histogram_fold_{}_shot_{}.pdf'.format(args.fold, args.nshot))
     print(save_path)
     print(Visualizer.vis_path)
@@ -209,7 +155,7 @@ if __name__ == '__main__':
 
     # Arguments parsing
     parser = argparse.ArgumentParser(
-        description='Pytorch Implementation of seg via clip'
+        description='Visual and Textual Prior Guided Mask Assemble for Few-Shot Segmentation and Beyond '
     )
     parser.add_argument('--datapath', type=str, default='./Datasets_HSN')
     parser.add_argument(
@@ -269,17 +215,13 @@ if __name__ == '__main__':
     FSSDataset.initialize(
         img_size=384, datapath=args.datapath, use_original_imgsize=False,debug=args.debug, strong_aug=args.strong_aug
     )
-    # dataloader_trn = FSSDataset.build_dataloader(
-    #     args.benchmark, args.bsz, args.nworker, args.fold, 'trn'
-    # )
+
     dataloader_val = FSSDataset.build_dataloader(
         args.benchmark, args.bsz, args.nworker, args.fold, 'val',args.nshot
     )
 
-     # Test HSNet
     with torch.no_grad():
         test_miou, test_fb_iou = test_vitclip(model, dataloader_val, 1)
-        # test_miou, test_fb_iou = test_vitclip(model, dataloader_trn, 1)
 
     Logger.info(
         'Fold %d mIoU: %5.1f \t FB-IoU: %5.1f'
